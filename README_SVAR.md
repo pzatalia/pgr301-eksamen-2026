@@ -66,9 +66,17 @@ Nøkkel: wishifai/19/terraform.tfstate
 
 State lages i den delete bucketen *pgr301-terraform-state*. Kandidatnummeret i nøkkelen gjør at min state ikke kolliderer med andre studeneter i samme bucket. 
 
+## OPPGAVE 2C - GitHub Actions-job for Terraform
 
+Workflow-fil: [.github/workflows/docker.yml](.github/workflows/docker.yml)
 
+Grønn kjøring: https://github.com/pzatalia/pgr301-eksamen-2026/actions/runs/41859998869
 
+Hvorfor Terraform kjører etter container-build:
+
+- Terraform sier til ECS hvilket image som skal kjøres, derfor må imaget finnes i ECS først.
+- Hvis terraform kjører før eller smatidig som vi bygger så kan imaget mangle og da vil deployen feile.
+- Commit-SHA lages i build-steget (oppgave 1B), terraform får den inn som variabel image_tag (oppgave 2A), og bruker denne til å velge hvilket image ECS skal kjøre. Derfor må byggingen være ferdig først. 
 
 
 
