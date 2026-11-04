@@ -1,6 +1,6 @@
 output "service_url" {
   description = "Offentlig URL til tjenesten"
-  value       = "https://${aws_ecs_express_gateway_service.wishifai.ingress_paths[0].endpoint}"
+  value       = aws_ecs_express_gateway_service.wishifai.ingress_paths[0].endpoint
 }
 
 output "s3_bucket" {
