@@ -35,6 +35,12 @@ data "aws_iam_policy_document" "task_permission" {
     ]
   }
 
+  statement {
+    sid       = "CloudWatchMetrics"
+    actions   = ["cloudwatch:PutMetricData"]
+    resources = ["*"]
+  }
+
 }
 
 resource "aws_iam_role_policy" "task_policy" {
