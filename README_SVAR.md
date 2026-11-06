@@ -91,15 +91,34 @@ Hvorfor Terraform kjører etter container-build:
 
 - Ugyldige AI svar (counter): Jeg har også lagt til en teller for ugyldige AI-svar, *wishifai.bedrock.invalid.responses*. Noen ganger svarer AI i feil format, og da får brukeren ingen gaveforslag, uansett svarer appen HTTP 200 OK, så ingen metrikker merker feilen. Telleren fanger gangene appen sier alt gikk bra, men brukeren ikke fikk gaveforslag. Normalt skal verdien være 0. Øker dette tallet kan AI-modellen eller prompten ha endret seg, og da bør vi finne ut av hvorfor den svarer i feil format.
 
-
-
 ## OPPGAVE 3B - Dashboard og alarm
 
+Terraform-kode: [infra/dashboard.tf](infra/dashboard.tf) & [infra/alarm_module/](infra/alarm_module/)
 
+Dashboard: *wishifai-19*
 
+Screenshot av dashboard: [Dashboard](media/dashboard.png)
 
+Metrikker på dashboard:
 
+- Buisness: bilder analysert : viser hvor mange bilder brukeren sender inn 
+- Buisness: snitt gaveforslag per bilde : viser kvaliteten brukerne får. Cloudwatch har ikke snittet ferdig utregnet, så det regnes ut som sum/antall. Fra screenshottet kan vi se at snittet ligger stabilt på 5, som er maks antall prompten ber om. 
 
+- Infrastruktur: CPU og minne fra ECS : Viser om container har nok ressurser. CPU ligger mesteparten av tiden under 1 til 2 % og minne rundt 11 %. Det betyr at verdiene jeg satte i oppgave 2A, 1 vCPU og 2 GB, er mer enn nok, noe som betyren at det ikke er serveren som er treig. 
+
+- Applikasjon: svartid for POST /api/analyze fra Actuator : Viser hvor lenge brukeren venter. Dashboardet viser rundt 17 sekunder. 
+
+- Jeg regnet selv ut hvor mye av ventetiden Bedrock står for. Fra metrikken wishifai.bedrock.latency hentet jeg totalt tid og antall kall som ble 46 449 ms ÷ 3 kall = ca. 15,5 sekunder per kall. Det betyr at bedrock tar mesteparten av tiden, ca. 90% (15,5 / 17). Som nevnt over så er CPU og minne nesten ubrukt, så tregheten kan ikke komme fra serveren. For at tjenesten skal være raskere må vi se på bedrock f.eks. en kortere prompt.
+
+Alarm: *wishifai-19-bedrock-latency*
+
+- Varsler: når bedrock kallet i snitt tar mer enn 20 sekunder over 5 minutter utløser alarmen.
+
+- Grunn: Bedrock tar mesteparten av ventetiden. Hvis tjenesten blir enda tregere, er det stor sjanse for at bedrock er årsaken. Et vanlig kall tar ca. 15,5 sekunder, derfor satte jeg grensen til 20 sekunder. Da går ikke alarmen av ved små svingninger, kun når bedrock er mye tregere enn vanlig.
+
+- Ingen trafikk: når tjenesten ikke brukes, finnes det ingen tid å måle derfor regnes det som ok *treat_missing_data = "notBreaching"*, dette gjør at alarmen ikke går uten grunn. 
+
+- Varslingsform: Alarmen sendr til et SNS-topic som sender e-post, som i labben. Jeg testet alarmen med *aws cloudwatch set-alarm-state*, og jeg fikk en epost. [Alarm](media/test_alarm.png)
 
 ## OPPGAVE 4 - Drøfteoppgave 
 
