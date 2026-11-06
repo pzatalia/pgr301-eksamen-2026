@@ -79,8 +79,27 @@ Hvorfor Terraform kjører etter container-build:
 - Commit-SHA lages i build-steget (oppgave 1B), terraform får den inn som variabel image_tag (oppgave 2A), og bruker denne til å velge hvilket image ECS skal kjøre. Derfor må byggingen være ferdig først. 
 
 
+## OPPGAVE 3A - Metrikker i applikasjonen
 
-## OPPGAVE 3 - Observability
+- Namespace: Brukte *wishifai-19* siden namespace var tomt, ellers hadde cloudwatch avvist metrikkene mine. Navnet gjør det også enklere for meg å finne mine metrikker siden kontoen er delt. 
+
+- IAM: task-rolen fikk tillatelse til *cloudwatch:PutMetricData*, som gir lov å sende metrikker. Uten denne ville appen fått *access denied*, og ingen metrikker ville kommet fram. 
+
+- Timer.builder i stedet for @Timed: I labben ble @Timed brukt, men @Timed krever avhengigenten AOP, som ikke finnes i wishifai-prosjektet. Derfor lagde jeg klokken selv med *Timer.builder()* og *Timer.record()*. Klokken virker uten AOP fordi jeg skriver direkte i koden hvor målingen starter og stopper (bare rekognition og bedrock blir målt, ikke hele koden).
+
+- Valgte antall gaveforslag per bilde (DistrubutionSummary) som buisness-metrikk. Metrikken sier noe om hvilken verdi brukeren får og ikke bare at tjenesten kjører. Denne metrikken viser hvor mange bilder som analyseres, hvor mange forslag som lages totalt og snittet per bilde. Prompten ber om inntil 5 forlag, så hvis snittet faller, får brukeren dårligere svar selv om appen virker. 
+
+- Ugyldige AI svar (counter): Jeg har også lagt til en teller for ugyldige AI-svar, *wishifai.bedrock.invalid.responses*. Noen ganger svarer AI i feil format, og da får brukeren ingen gaveforslag, uansett svarer appen HTTP 200 OK, så ingen metrikker merker feilen. Telleren fanger gangene appen sier alt gikk bra, men brukeren ikke fikk gaveforslag. Normalt skal verdien være 0. Øker dette tallet kan AI-modellen eller prompten ha endret seg, og da bør vi finne ut av hvorfor den svarer i feil format.
+
+
+
+## OPPGAVE 3B - Dashboard og alarm
+
+
+
+
+
+
 
 ## OPPGAVE 4 - Drøfteoppgave 
 
