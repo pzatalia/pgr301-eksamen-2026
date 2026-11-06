@@ -17,3 +17,8 @@ output "task_role_arn" {
   description = "Task rollen tjenesten bruker"
   value       = aws_iam_role.task_role.arn
 }
+
+output "dashboard_name"{
+  description = "Navn på Cloudwatch dashboard"
+  value = aws_cloudwatch_dashboard.main.dashboard_name
+}
