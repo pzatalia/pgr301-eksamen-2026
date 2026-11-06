@@ -18,7 +18,7 @@ output "task_role_arn" {
   value       = aws_iam_role.task_role.arn
 }
 
-output "dashboard_name"{
+output "dashboard_name" {
   description = "Navn på Cloudwatch dashboard"
-  value = aws_cloudwatch_dashboard.main.dashboard_name
+  value       = aws_cloudwatch_dashboard.main.dashboard_name
 }
