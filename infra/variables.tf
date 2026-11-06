@@ -32,3 +32,10 @@ variable "image_tag" {
     error_message = "image_tag må være en gyldig docker-tag"
   }
 }
+
+variable "alarm_email" {
+  type        = string
+  default     = "pzatalia@gmail.com"
+  description = "Mailen som blir varslet når alarmen går"
+
+}
