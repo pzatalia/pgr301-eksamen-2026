@@ -17,6 +17,7 @@ Bytt ut med egne AWS-nøkler:
     -e AWS_ACCESS_KEY_ID=<din secret> \
     -e AWS_SECRET_ACCESS_KEY=<din secret> \
     -e AWS_REGION=eu-west-1 \
+    -e S3_BUCKET=wishifai-images-19 \
     pzataliaa/wishifai:latest
 
 Test:
@@ -54,7 +55,7 @@ Valg:
 
 - Outputs: viser URL-en, bucketnavn, imaget som kjører og task-rollen. Gjør at det er lett å se hva som ble deploeyt.
 
-- IAM-roller: Execution role og infrastructure role er eksisterende roller i kontoen. Jeg laget en egen task-rolle *wishifai-task-role-19*, som gir appen lov til 3 ting. 1. lese og skrive i egen bucket. 2. Bruke rekognition til å finne objekter i bildet. 3. Kalle Claude modellen i Bedrock for å lage gavelisten. 
+- IAM-roller: Execution role og infrastructure role er eksisterende roller i kontoen. Jeg laget en egen task-rolle *wishifai-task-role-19*, som gir appen lov til 4 ting. 1. lese og skrive i egen bucket. 2. Bruke rekognition til å finne objekter i bildet. 3. Kalle Claude modellen i Bedrock for å lage gavelisten. 4. Sende metrikker til CloudWatch (lagt til i oppgave 3A).
 
 - S3_bucket: I ecs.tf settes S3_BUCKET til navnet på bucketen Terraform lager. Da kan ikke appen og bucketen få forskjellige navn ved en feil, og man trenger ikke å oppdatere verdien manuelt. 
 
@@ -74,12 +75,22 @@ Grønn kjøring: https://github.com/pzatalia/pgr301-eksamen-2026/actions/runs/41
 
 Hvorfor Terraform kjører etter container-build:
 
-- Terraform sier til ECS hvilket image som skal kjøres, derfor må imaget finnes i ECS først.
+- Terraform sier til ECS hvilket image som skal kjøres, derfor må imaget finnes i ECR først.
 - Hvis terraform kjører før eller smatidig som vi bygger så kan imaget mangle og da vil deployen feile.
 - Commit-SHA lages i build-steget (oppgave 1B), terraform får den inn som variabel image_tag (oppgave 2A), og bruker denne til å velge hvilket image ECS skal kjøre. Derfor må byggingen være ferdig først. 
 
 
 ## OPPGAVE 3A - Metrikker i applikasjonen
+
+Metrikker:
+
+- Rekognition og Bedrock (Timer): *wishifai.rekognition.latency* og *wishifai.bedrock.latency* måler hvor lang tid hvert kall tar. Gjør det mulig for oss å se hvilket steg som tar mest tid slik at vi slipper å gjette oss fram til det. 
+
+- Antall gaveforslag per bilde (DistributionSummary) som buisness-metrikk. Metrikken sier noe om hvilken verdi brukeren får og ikke bare at tjenesten kjører. Denne metrikken viser hvor mange bilder som analyseres, hvor mange forslag som lages totalt og snittet per bilde. Prompten ber om inntil 5 forlag, så hvis snittet faller, får brukeren dårligere svar selv om appen virker. 
+
+- Ugyldige AI svar (counter): *wishifai.bedrock.invalid.responses*. Noen ganger svarer AI i feil format, og da får brukeren ingen gaveforslag, uansett svarer appen HTTP 200 OK, så ingen metrikker merker feilen. Telleren fanger gangene appen sier alt gikk bra, men brukeren ikke fikk gaveforslag. Normalt skal verdien være 0. Øker dette tallet kan AI-modellen eller prompten ha endret seg, og da bør vi finne ut av hvorfor den svarer i feil format.
+
+Oppsett:
 
 - Namespace: Brukte *wishifai-19* siden namespace var tomt, ellers hadde cloudwatch avvist metrikkene mine. Navnet gjør det også enklere for meg å finne mine metrikker siden kontoen er delt. 
 
@@ -87,9 +98,6 @@ Hvorfor Terraform kjører etter container-build:
 
 - Timer.builder i stedet for @Timed: I labben ble @Timed brukt, men @Timed krever avhengigenten AOP, som ikke finnes i wishifai-prosjektet. Derfor lagde jeg klokken selv med *Timer.builder()* og *Timer.record()*. Klokken virker uten AOP fordi jeg skriver direkte i koden hvor målingen starter og stopper (bare rekognition og bedrock blir målt, ikke hele koden).
 
-- Valgte antall gaveforslag per bilde (DistrubutionSummary) som buisness-metrikk. Metrikken sier noe om hvilken verdi brukeren får og ikke bare at tjenesten kjører. Denne metrikken viser hvor mange bilder som analyseres, hvor mange forslag som lages totalt og snittet per bilde. Prompten ber om inntil 5 forlag, så hvis snittet faller, får brukeren dårligere svar selv om appen virker. 
-
-- Ugyldige AI svar (counter): Jeg har også lagt til en teller for ugyldige AI-svar, *wishifai.bedrock.invalid.responses*. Noen ganger svarer AI i feil format, og da får brukeren ingen gaveforslag, uansett svarer appen HTTP 200 OK, så ingen metrikker merker feilen. Telleren fanger gangene appen sier alt gikk bra, men brukeren ikke fikk gaveforslag. Normalt skal verdien være 0. Øker dette tallet kan AI-modellen eller prompten ha endret seg, og da bør vi finne ut av hvorfor den svarer i feil format.
 
 ## OPPGAVE 3B - Dashboard og alarm
 
@@ -120,7 +128,18 @@ Alarm: *wishifai-19-bedrock-latency*
 
 - Varslingsform: Alarmen sendr til et SNS-topic som sender e-post, som i labben. Jeg testet alarmen med *aws cloudwatch set-alarm-state*, og jeg fikk en epost. [Alarm](media/test_alarm.png)
 
+
 ## OPPGAVE 4 - Drøfteoppgave 
+
+Når en vanlig app har en feil, krasjer den eller gir en feilmelding. En AI-app som Wishifai mangler sunn fornuft. Den kan foreslå en upassende gave, men appen vil fortsatt svare HTTP 200 som om alt gikk bra. Testene blir godkjent, men innholdet blir aldri testet. Dette betyr at testing, leveranse og overvåkning i DevOps må tilpasses fordi de er laget for å finne tekniske feil og ikke feil i innholdet. 
+
+I Wishifai kan samme bilde gi forskjellige gaveforslag hver gang. En vanlig test som forventer ett bestemt svar hadde derfor feilet selv om svarene var gode. I stedet kan man bruke et eval-set, der man sender inn faste testbilder og sjekker om svaret er godt nok, f.eks. at det har 5 forslag og ingen farlige gaver for barn. Svaret trenger ikke å være ordrett med fasiten, det må bare være riktig. Dette kunne vært en gate i pipelinen min mellom bygg og deploy. Med LLM-as-judge kan en annen AI vurdere svarene automatisk, men da igjen kan den AI-en ta feil, så jeg vil si at automatiske tester alene ikke er nok. Vi mennesker må fortsatt ta stikkprøver. 
+
+I en AI-app er det ikke bare koden som bestemner svarene, men også prompten og modellen. I pipelinen min tagges imaget med en commit-SHA. Prompten ligger i koden og følger taggen, men modellen settes med en miljøvariabel og kan byttes uten ny commit. Da kan appen gi helt andre svar med samme tag. Derfor bør modellvalget også ligge i Git, slik at det kan spores og rulles tilbake. Ved bytte av modell kan man bruke canary, der noen få brukere får den nye modellen først. Er den dårligere, rammes bare de. Dette er nok unødvendig for Wishifai, men nødvendig i en bank.
+
+Overvåkningen min fra oppgave 3 måler tid og format. Hvis Wishifai foreslår en kniv til et barn, vil ingen av metrikkene mine reagere. Derfor trenger vi andre signaler enn latency og feilrater. Business-metrikken min viser f.eks. endringer i svarene over tid: hvis snittet av gaveforslag faller fra 5 til 2 etter et modellbytte, har kvaliteten antagelig blitt dårligere. Slike signaler kan likevel bare vise at noe har endret seg, ikke om svarene er trygge. Det er noe vi mennesker må vurdere. 
+
+Hvor mye kontroll man trenger, avhenger av hvor alvorlig det er om AI-en tar feil. En dårlig gaveliste er irriterende, men ikke farlig. Noen feil kan oppdages i produksjon, så lenge eval-set og stikkprøver fanger det mest alvorlige. I en bank kan AI-en anbefale et risikabelt fond til en pensjonist som ikke har råd til å tape penger. Der bør eval-settet være en gate som stopper deploy, og et menneske bør godkjenne hver gang prompten eller modellen endres. Kunderådgiveren bør også sjekke rådet før kunden får det. AI gjør at DevOps ikke bare må spørre om appen virker, men også om svaret er riktig og trygt. For en gaveliste holder automatikk, men når mye står på spill, som i en bank eller i helsevesenet, må mennesker ha kontrollen.
 
 
 
